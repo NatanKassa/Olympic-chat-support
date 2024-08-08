@@ -1,43 +1,77 @@
 'use client'
 
-import { useState } from 'react'
+import { useState } from 'react';
 import { Box, Button, Stack, TextField, Typography } from '@mui/material';
 
+const translations = {
+  en: {
+    header: "Chat with Olympics Assistant",
+    selectLanguage: "Select Language:",
+    placeholder: "Ask your question...",
+    sendButton: "Send",
+    error: "I'm sorry, but I encountered an error. Please try again later.",
+    dislikeButton: "Dislike",
+  },
+  fr: {
+    header: "Discutez avec l'assistant des Jeux Olympiques",
+    selectLanguage: "Choisissez la langue :",
+    placeholder: "Posez votre question...",
+    sendButton: "Envoyer",
+    error: "Je suis désolé, mais j'ai rencontré une erreur. Veuillez réessayer plus tard.",
+    dislikeButton: "Je n'aime pas",
+  },
+  es: {
+    header: "Chatea con el asistente de los Juegos Olímpicos",
+    selectLanguage: "Selecciona el idioma:",
+    placeholder: "Haz tu pregunta...",
+    sendButton: "Enviar",
+    error: "Lo siento, pero encontré un error. Por favor, inténtalo de nuevo más tarde.",
+    dislikeButton: "No me gusta",
+  }
+};
+
 export default function Home() {
-  const [messages, setMessages] = useState([
+  // States for each language's messages
+  const [messagesEn, setMessagesEn] = useState([
     {
       role: 'assistant',
-      content: "Hi! I'm the Olympics support assistant. How can I help you today?",
+      content: translations.en.error,
     },
   ]);
+  const [messagesFr, setMessagesFr] = useState([
+    {
+      role: 'assistant',
+      content: translations.fr.error,
+    },
+  ]);
+  const [messagesEs, setMessagesEs] = useState([
+    {
+      role: 'assistant',
+      content: translations.es.error,
+    },
+  ]);
+
   const [message, setMessage] = useState('');
   const [regenerateIndex, setRegenerateIndex] = useState(null);
-  const [isRegenerating, setIsRegenerating] = useState(false); // New state to track regeneration
+  const [isRegenerating, setIsRegenerating] = useState(false);
+  const [language, setLanguage] = useState('en');
 
   const sendMessage = async (regenerate = false) => {
-    const messageToSend = regenerate ? messages[regenerateIndex]?.content : message;
+    const messageToSend = regenerate
+      ? getMessages().find((_, index) => index === regenerateIndex)?.content
+      : message;
 
     if (!messageToSend?.trim()) return;
 
-    console.log('Sending message:', messageToSend);
-    console.log('Regenerate flag:', regenerate);
-
-    // Clear message input if not regenerating
-    if (!regenerate) setMessage('');
-
-    // Prepare new messages array
-    const newMessages = [...messages];
+    const newMessages = [...getMessages()];
     if (regenerate) {
-      // Replace the content of the message at regenerateIndex
-      newMessages[messages.length - 1] = { ...newMessages[regenerateIndex], content: '' };
+      newMessages[messagesEn.length - 1] = { ...newMessages[regenerateIndex], content: '' };
     } else {
-      // Add user message to messages array
       newMessages.push({ role: 'user', content: messageToSend });
       newMessages.push({ role: 'assistant', content: '' });
     }
 
-    // Update messages array with the new messages
-    setMessages(newMessages);
+    updateMessages(newMessages);
 
     try {
       const response = await fetch('/api/chat', {
@@ -45,7 +79,7 @@ export default function Home() {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ messages: newMessages, regenerate }),
+        body: JSON.stringify({ messages: newMessages, regenerate, language }),
       });
 
       if (!response.ok) {
@@ -54,7 +88,6 @@ export default function Home() {
 
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
-
       let newContent = '';
 
       while (true) {
@@ -63,13 +96,11 @@ export default function Home() {
         const text = decoder.decode(value, { stream: true });
         newContent += text.replace(/###\s*|\*\*.*?\*\*|\*\*/g, '');
 
-        setMessages((prevMessages) => {
+        updateMessages((prevMessages) => {
           const updatedMessages = [...prevMessages];
           if (regenerate) {
-            // Replace the content of the message at regenerateIndex with new content
             updatedMessages[updatedMessages.length - 1] = { ...updatedMessages[regenerateIndex], content: newContent };
           } else {
-            // Update the latest assistant message with new content
             updatedMessages[updatedMessages.length - 1] = { role: 'assistant', content: newContent };
           }
           return updatedMessages;
@@ -77,30 +108,54 @@ export default function Home() {
       }
     } catch (error) {
       console.error('Error:', error);
-      setMessages((prevMessages) => [
+      updateMessages((prevMessages) => [
         ...prevMessages,
-        { role: 'assistant', content: "I'm sorry, but I encountered an error. Please try again later." },
+        { role: 'assistant', content: translations[language].error },
       ]);
     } finally {
-      // Reset the regeneration state
       setIsRegenerating(false);
     }
   };
 
   const handleDislike = (index) => {
-    console.log('Dislike clicked for message index:', index);
     setRegenerateIndex(index);
-    setIsRegenerating(true); // Set regeneration state to true
-    sendMessage(true); // Call sendMessage with regenerate flag
+    setIsRegenerating(true);
+    sendMessage(true);
   };
 
   const handleSendMessage = () => {
     if (message.trim()) {
       if (isRegenerating) {
-        // If currently regenerating, wait until the regeneration is done before sending a new message
         setIsRegenerating(false);
       }
-      sendMessage(); // Send the current message
+      sendMessage();
+      setMessage('');
+    }
+  };
+
+  const handleLanguageChange = (lang) => {
+    setLanguage(lang);
+    // Reset messages when changing language
+    switch (lang) {
+      case 'fr': setMessagesFr([...messagesFr]); break;
+      case 'es': setMessagesEs([...messagesEs]); break;
+      default: setMessagesEn([...messagesEn]); break;
+    }
+  };
+
+  const getMessages = () => {
+    switch (language) {
+      case 'fr': return messagesFr;
+      case 'es': return messagesEs;
+      default: return messagesEn;
+    }
+  };
+
+  const updateMessages = (newMessages) => {
+    switch (language) {
+      case 'fr': setMessagesFr(newMessages); break;
+      case 'es': setMessagesEs(newMessages); break;
+      default: setMessagesEn(newMessages); break;
     }
   };
 
@@ -134,8 +189,36 @@ export default function Home() {
           alignItems="center"
         >
           <Typography variant="h5" fontWeight="bold" color="#333">
-            Chat with Olympics Assistant
+            {translations[language].header}
           </Typography>
+        </Box>
+
+        {/* Language Selector */}
+        <Box p={2} bgcolor="#f5f5f5" borderBottom="1px solid #ccc">
+          <Typography variant="body1" fontWeight="bold">{translations[language].selectLanguage}</Typography>
+          <Stack direction="row" spacing={1}>
+            <Button
+              variant={language === 'en' ? 'contained' : 'outlined'}
+              onClick={() => handleLanguageChange('en')}
+              sx={{ bgcolor: language === 'en' ? '#FCB131' : 'transparent', color: language === 'en' ? 'black' : '#FCB131' }}
+            >
+              English
+            </Button>
+            <Button
+              variant={language === 'fr' ? 'contained' : 'outlined'}
+              onClick={() => handleLanguageChange('fr')}
+              sx={{ bgcolor: language === 'fr' ? '#FCB131' : 'transparent', color: language === 'fr' ? 'black' : '#FCB131' }}
+            >
+              French
+            </Button>
+            <Button
+              variant={language === 'es' ? 'contained' : 'outlined'}
+              onClick={() => handleLanguageChange('es')}
+              sx={{ bgcolor: language === 'es' ? '#FCB131' : 'transparent', color: language === 'es' ? 'black' : '#FCB131' }}
+            >
+              Spanish
+            </Button>
+          </Stack>
         </Box>
 
         {/* Messages Section */}
@@ -146,7 +229,7 @@ export default function Home() {
           p={2}
           bgcolor="#fafafa"
         >
-          {messages.map((msg, index) => (
+          {getMessages().map((msg, index) => (
             <Box
               key={index}
               display="flex"
@@ -164,7 +247,7 @@ export default function Home() {
               >
                 {msg.content}
               </Box>
-              {msg.role === 'assistant' && index === messages.length - 1 && (
+              {msg.role === 'assistant' && index === getMessages().length - 1 && (
                 <Box mt={1} display="flex" justifyContent="center">
                   <Button
                     variant="outlined"
@@ -178,18 +261,17 @@ export default function Home() {
                       },
                     }}
                   >
-                    Dislike
+                    {translations[language].dislikeButton}
                   </Button>
                 </Box>
               )}
             </Box>
           ))}
         </Stack>
-
         {/* Input Section */}
         <Stack direction="row" spacing={1} p={1} alignItems="center">
           <TextField
-            label="Ask your question..."
+            label={translations[language].placeholder}
             fullWidth
             variant="outlined"
             size="small"
@@ -198,7 +280,7 @@ export default function Home() {
             onKeyDown={(e) => {
               if (e.key === 'Enter') {
                 e.preventDefault();
-                handleSendMessage(); // Use handleSendMessage instead
+                handleSendMessage();
               }
             }}
             sx={{
@@ -220,7 +302,7 @@ export default function Home() {
           />
           <Button
             variant="contained"
-            onClick={handleSendMessage} // Use handleSendMessage instead
+            onClick={handleSendMessage}
             sx={{
               bgcolor: '#FCB131',
               color: 'black',
@@ -229,10 +311,11 @@ export default function Home() {
               },
             }}
           >
-            Send
+            {translations[language].sendButton}
           </Button>
         </Stack>
       </Stack>
     </Box>
   );
 }
+
