@@ -1,5 +1,5 @@
-import {NextResponse} from 'next/server' // Import NextResponse from Next.js for handling responses
-import OpenAI from 'openai' // Import OpenAI library for interacting with the OpenAI API
+import { NextResponse } from 'next/server'
+import OpenAI from 'openai'
 
 // System prompt for the AI, providing guidelines on how to respond to users
 const systemPrompt = `
@@ -24,37 +24,54 @@ Enjoy your journey through Olympic history and current events!
 `;
 
 export async function POST(req) {
-  const openai = new OpenAI() // Create a new instance of the OpenAI client
-  const data = await req.json() // Parse the JSON body of the incoming request
+  const openai = new OpenAI()
 
-  // Create a chat completion request to the OpenAI API
-  const completion = await openai.chat.completions.create({
-    messages: [{ role: 'system', content: systemPrompt }, ...data], // Include the system prompt and user messages
-    model: 'gpt-4o', // Specify the model to use
-    stream: true, // Enable streaming responses
-  })
+  try {
+    const data = await req.json()
+    console.log('Request data:', data); // Log request data
 
-  // Create a ReadableStream to handle the streaming response
-  const stream = new ReadableStream({
-    async start(controller) {
-      const encoder = new TextEncoder() // Create a TextEncoder to convert strings to Uint8Array
-      try {
-        // Iterate over the streamed chunks of the response
-        for await (const chunk of completion) {
-          const content = chunk.choices[0]?.delta?.content // Extract the content from the chunk
-          if (content) {
-            const cleanedContent = content.replace(/###\s*|\*\*.*?\*\*/g, ''); // Clean markdown from the content
-            const text = encoder.encode(cleanedContent) // Encode the content to Uint8Array
-            controller.enqueue(text) // Enqueue the encoded text to the stream
-          }
-        }
-      } catch (err) {
-        controller.error(err) // Handle any errors that occur during streaming
-      } finally {
-        controller.close() // Close the stream when done
+    const { messages = [], regenerate = false } = data
+
+    let messagesToSend = [...messages]
+
+    if (regenerate) {
+      const previousQuestion = messages[messages.length - 1]?.content
+      if (previousQuestion) {
+        messagesToSend = messages.slice(0, -1)
+        messagesToSend.push({ role: 'user', content: previousQuestion })
       }
-    },
-  })
+    }
 
-  return new NextResponse(stream) // Return the stream as the response
+    const completion = await openai.chat.completions.create({
+      messages: [{ role: 'system', content: systemPrompt }, ...messagesToSend],
+      model: 'gpt-4o',
+      stream: true,
+    })
+
+    const stream = new ReadableStream({
+      async start(controller) {
+        const encoder = new TextEncoder()
+        try {
+          for await (const chunk of completion) {
+            const content = chunk.choices[0]?.delta?.content
+            if (content) {
+              const cleanedContent = content.replace(/###\s*|\*\*.*?\*\*/g, '')
+              const text = encoder.encode(cleanedContent)
+              controller.enqueue(text)
+            }
+          }
+        } catch (err) {
+          console.error('Stream error:', err)
+          controller.error(err)
+        } finally {
+          controller.close()
+        }
+      },
+    })
+
+    return new NextResponse(stream)
+  } catch (err) {
+    console.error('Request handling error:', err)
+    return new NextResponse('Internal Server Error', { status: 500 })
+  }
 }

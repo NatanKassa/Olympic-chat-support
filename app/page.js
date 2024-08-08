@@ -9,64 +9,100 @@ export default function Home() {
       role: 'assistant',
       content: "Hi! I'm the Olympics support assistant. How can I help you today?",
     },
-  ])
-  const [message, setMessage] = useState('')
+  ]);
+  const [message, setMessage] = useState('');
+  const [regenerateIndex, setRegenerateIndex] = useState(null);
+  const [isRegenerating, setIsRegenerating] = useState(false); // New state to track regeneration
 
-  const sendMessage = async () => {
-    if (!message.trim()) return;  // Don't send empty messages
-  
-    setMessage('')
-    setMessages((messages) => [
-      ...messages,
-      { role: 'user', content: message },
-      { role: 'assistant', content: '' },
-    ])
-  
+  const sendMessage = async (regenerate = false) => {
+    const messageToSend = regenerate ? messages[regenerateIndex]?.content : message;
+
+    if (!messageToSend?.trim()) return;
+
+    console.log('Sending message:', messageToSend);
+    console.log('Regenerate flag:', regenerate);
+
+    // Clear message input if not regenerating
+    if (!regenerate) setMessage('');
+
+    // Prepare new messages array
+    const newMessages = [...messages];
+    if (regenerate) {
+      // Replace the content of the message at regenerateIndex
+      newMessages[messages.length - 1] = { ...newMessages[regenerateIndex], content: '' };
+    } else {
+      // Add user message to messages array
+      newMessages.push({ role: 'user', content: messageToSend });
+      newMessages.push({ role: 'assistant', content: '' });
+    }
+
+    // Update messages array with the new messages
+    setMessages(newMessages);
+
     try {
       const response = await fetch('/api/chat', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify([...messages, { role: 'user', content: message }]),
-      })
-  
-      if (!response.ok) {
-        throw new Error('Network response was not ok')
-      }
-  
-      const reader = response.body.getReader()
-      const decoder = new TextDecoder()
-  
-      let newContent = '';
-  
-      while (true) {
-        const { done, value } = await reader.read()
-        if (done) break
-        const text = decoder.decode(value, { stream: true })
-  
-        // Process and clean up the response text
-        newContent += text.replace(/###\s*|\*\*.*?\*\*|\*\*/g, ''); // Remove markdown like ###, **Bold Text**, and ** alone
+        body: JSON.stringify({ messages: newMessages, regenerate }),
+      });
 
-  
-        setMessages((messages) => {
-          let lastMessage = messages[messages.length - 1]
-          let otherMessages = messages.slice(0, messages.length - 1)
-          return [
-            ...otherMessages,
-            { ...lastMessage, content: newContent },
-          ]
-        })
+      if (!response.ok) {
+        throw new Error('Network response was not ok');
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+
+      let newContent = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        const text = decoder.decode(value, { stream: true });
+        newContent += text.replace(/###\s*|\*\*.*?\*\*|\*\*/g, '');
+
+        setMessages((prevMessages) => {
+          const updatedMessages = [...prevMessages];
+          if (regenerate) {
+            // Replace the content of the message at regenerateIndex with new content
+            updatedMessages[updatedMessages.length - 1] = { ...updatedMessages[regenerateIndex], content: newContent };
+          } else {
+            // Update the latest assistant message with new content
+            updatedMessages[updatedMessages.length - 1] = { role: 'assistant', content: newContent };
+          }
+          return updatedMessages;
+        });
       }
     } catch (error) {
-      console.error('Error:', error)
-      setMessages((messages) => [
-        ...messages,
+      console.error('Error:', error);
+      setMessages((prevMessages) => [
+        ...prevMessages,
         { role: 'assistant', content: "I'm sorry, but I encountered an error. Please try again later." },
-      ])
+      ]);
+    } finally {
+      // Reset the regeneration state
+      setIsRegenerating(false);
     }
-  }
-  
+  };
+
+  const handleDislike = (index) => {
+    console.log('Dislike clicked for message index:', index);
+    setRegenerateIndex(index);
+    setIsRegenerating(true); // Set regeneration state to true
+    sendMessage(true); // Call sendMessage with regenerate flag
+  };
+
+  const handleSendMessage = () => {
+    if (message.trim()) {
+      if (isRegenerating) {
+        // If currently regenerating, wait until the regeneration is done before sending a new message
+        setIsRegenerating(false);
+      }
+      sendMessage(); // Send the current message
+    }
+  };
 
   return (
     <Box
@@ -93,15 +129,14 @@ export default function Home() {
           bgcolor="#EE334E"
           p={2}
           borderBottom="1px solid #ccc"
-          display="flex"  // Enable flexbox
-          justifyContent="center"  // Center horizontally
-          alignItems="center"  // Center vertically (if necessary)
+          display="flex"
+          justifyContent="center"
+          alignItems="center"
         >
           <Typography variant="h5" fontWeight="bold" color="#333">
             Chat with Olympics Assistant
           </Typography>
         </Box>
-
 
         {/* Messages Section */}
         <Stack
@@ -111,29 +146,42 @@ export default function Home() {
           p={2}
           bgcolor="#fafafa"
         >
-          {messages.map((message, index) => (
+          {messages.map((msg, index) => (
             <Box
               key={index}
               display="flex"
-              justifyContent={
-                message.role === 'assistant' ? 'flex-start' : 'flex-end'
-              }
+              flexDirection="column"
+              alignItems={msg.role === 'assistant' ? 'flex-start' : 'flex-end'}
               p={1}
             >
               <Box
-                bgcolor={
-                  message.role === 'assistant'
-                    ? '#009147'
-                    : '#37ad70'
-                }
+                bgcolor={msg.role === 'assistant' ? '#009147' : '#37ad70'}
                 color="white"
                 borderRadius={6}
                 p={2}
                 maxWidth="80%"
                 sx={{ wordBreak: 'break-word' }}
               >
-                {message.content}
+                {msg.content}
               </Box>
+              {msg.role === 'assistant' && index === messages.length - 1 && (
+                <Box mt={1} display="flex" justifyContent="center">
+                  <Button
+                    variant="outlined"
+                    onClick={() => handleDislike(index)}
+                    sx={{
+                      borderColor: '#FCB131',
+                      color: '#FCB131',
+                      '&:hover': {
+                        borderColor: '#f9a825',
+                        color: '#f9a825',
+                      },
+                    }}
+                  >
+                    Dislike
+                  </Button>
+                </Box>
+              )}
             </Box>
           ))}
         </Stack>
@@ -149,35 +197,35 @@ export default function Home() {
             onChange={(e) => setMessage(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === 'Enter') {
-                e.preventDefault();  // Prevent default behavior (like form submission)
-                sendMessage();
+                e.preventDefault();
+                handleSendMessage(); // Use handleSendMessage instead
               }
             }}
             sx={{
               '& .MuiInputLabel-root': {
-                color: 'black',  // Label color
+                color: 'black',
               },
               '& .MuiOutlinedInput-root': {
                 '& fieldset': {
-                  borderColor: 'black',  // Border color when not focused
+                  borderColor: 'black',
                 },
                 '&:hover fieldset': {
-                  borderColor: 'black',  // Border color on hover
+                  borderColor: 'black',
                 },
                 '&.Mui-focused fieldset': {
-                  borderColor: 'black',  // Border color when focused
+                  borderColor: 'black',
                 },
               },
             }}
           />
           <Button
             variant="contained"
-            onClick={sendMessage}
+            onClick={handleSendMessage} // Use handleSendMessage instead
             sx={{
-              bgcolor: '#FCB131',  // Background color
-              color: 'black',  // Text color
+              bgcolor: '#FCB131',
+              color: 'black',
               '&:hover': {
-                bgcolor: '#f9a825',  // Hover background color (optional)
+                bgcolor: '#f9a825',
               },
             }}
           >
@@ -186,5 +234,5 @@ export default function Home() {
         </Stack>
       </Stack>
     </Box>
-  )
+  );
 }
