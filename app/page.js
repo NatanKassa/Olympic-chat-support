@@ -170,6 +170,24 @@ export default function Home() {
       bgcolor="#0081C8"
       p={3}
     >
+      <Box
+        width="100%"
+        display="flex"
+        justifyContent="center"
+        p={2}
+      >
+        <Box
+          component="img"
+          src="/olympics.png"
+          alt="Olympics"
+          sx={{
+            maxWidth: { xs: '100px', sm: '150px', md: '200px' }, // Adjust sizes as needed
+            maxHeight: { xs: '100px', sm: '150px', md: '200px' },
+            width: 'auto',
+            height: 'auto',
+          }}
+        />
+      </Box>
       <Stack
         direction="column"
         width={{ xs: '95vw', sm: '85vw', md: '70vw' }}
