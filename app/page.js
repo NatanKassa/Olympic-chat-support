@@ -11,6 +11,7 @@ const translations = {
     sendButton: "Send",
     error: "I'm sorry, but I encountered an error. Please try again later.",
     dislikeButton: "Dislike",
+    intro: "Hey, how can I help? ",
   },
   fr: {
     header: "Discutez avec l'assistant des Jeux Olympiques",
@@ -19,6 +20,7 @@ const translations = {
     sendButton: "Envoyer",
     error: "Je suis désolé, mais j'ai rencontré une erreur. Veuillez réessayer plus tard.",
     dislikeButton: "Je n'aime pas",
+    intro: "Hé, comment puis-je aider ?",
   },
   es: {
     header: "Chatea con el asistente de los Juegos Olímpicos",
@@ -27,6 +29,7 @@ const translations = {
     sendButton: "Enviar",
     error: "Lo siento, pero encontré un error. Por favor, inténtalo de nuevo más tarde.",
     dislikeButton: "No me gusta",
+    intro: "Oye, ¿cómo puedo ayudar?",
   }
 };
 
@@ -35,19 +38,19 @@ export default function Home() {
   const [messagesEn, setMessagesEn] = useState([
     {
       role: 'assistant',
-      content: translations.en.error,
+      content: translations.en.intro,
     },
   ]);
   const [messagesFr, setMessagesFr] = useState([
     {
       role: 'assistant',
-      content: translations.fr.error,
+      content: translations.fr.intro,
     },
   ]);
   const [messagesEs, setMessagesEs] = useState([
     {
       role: 'assistant',
-      content: translations.es.error,
+      content: translations.es.intro,
     },
   ]);
 
